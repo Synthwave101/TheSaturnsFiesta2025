@@ -52,18 +52,6 @@ const GLB_FAR_MULTIPLIER = {
   default: 6.0,
 } as const;
 
-// Desplazamiento vertical del GLB para evitar recortes; aumenta los valores para bajar más el modelo.
-const GLB_BASE_OFFSET = {
-  ios: {
-    multiplier: 0.08,
-    maxShift: 0.2,
-  },
-  default: {
-    multiplier: 0.14,
-    maxShift: 0.3,
-  },
-} as const;
-
 // Control del rango de flotación; reduce el multiplier o maxRatio para limitar el movimiento vertical.
 const GLB_FLOAT_RANGE = {
   ios: {
@@ -76,6 +64,12 @@ const GLB_FLOAT_RANGE = {
     minAmplitude: 0.06,
     maxRatio: 0.2,
   },
+} as const;
+
+// Margen mínimo que se reserva por debajo del modelo para evitar recortes cuando alcanza el punto más bajo de la animación.
+const GLB_BOTTOM_MARGIN_FACTOR = {
+  ios: 0.04,
+  default: 0.06,
 } as const;
 
 const FRAME_DIMENSIONS = {
@@ -324,11 +318,17 @@ export function InvitationScene({ pixelFontClass }: InvitationSceneProps) {
           const scaledBox = new THREE.Box3().setFromObject(model);
           const scaledSize = scaledBox.getSize(new THREE.Vector3());
           const scaledHeight = scaledSize.y;
-          const baseOffsetConfig = GLB_BASE_OFFSET[deviceKey];
-          const rawOffset = scaledHeight * baseOffsetConfig.multiplier;
-          const clampedOffset = Math.min(rawOffset, baseOffsetConfig.maxShift);
-          const baseYOffset = -clampedOffset;
-          model.position.y += baseYOffset;
+          const sphere = scaledBox.getBoundingSphere(new THREE.Sphere());
+          const radius = sphere ? sphere.radius : Math.max(scaledSize.x, scaledSize.y, scaledSize.z) * 0.5;
+
+          const floatConfig = GLB_FLOAT_RANGE[deviceKey];
+          const baseAmplitude = scaledHeight * floatConfig.multiplier;
+          const amplitudeWithFloor = Math.max(baseAmplitude, floatConfig.minAmplitude);
+          const floatAmplitude = Math.min(amplitudeWithFloor, radius * floatConfig.maxRatio);
+
+          const bottomMargin = scaledHeight * GLB_BOTTOM_MARGIN_FACTOR[deviceKey];
+          const restingYOffset = -scaledBox.min.y + bottomMargin + floatAmplitude;
+          model.position.y += restingYOffset;
 
           model.traverse((child) => {
             if ((child as THREE.Mesh).isMesh) {
@@ -338,28 +338,24 @@ export function InvitationScene({ pixelFontClass }: InvitationSceneProps) {
             }
           });
 
-          const sphere = scaledBox.getBoundingSphere(new THREE.Sphere());
-          const radius = sphere ? sphere.radius : Math.max(scaledSize.x, scaledSize.y, scaledSize.z) * 0.5;
+          const motionRadius = radius + floatAmplitude;
           const fov = THREE.MathUtils.degToRad(camera.fov);
-          const distance = radius / Math.sin(fov / 2);
+          const distance = motionRadius / Math.sin(fov / 2);
           const focusMultiplier = GLB_LOOK_AT_OFFSET_MULTIPLIER[deviceKey];
-          const focusY = baseYOffset + scaledHeight * focusMultiplier;
+          const focusY = restingYOffset + scaledHeight * focusMultiplier;
           const distanceFactor = GLB_CAMERA_DISTANCE_FACTOR[deviceKey];
           const cameraZ = (distance * distanceFactor) / normalizedSizeRatio;
           const verticalOffset = GLB_CAMERA_VERTICAL_OFFSET[deviceKey];
           camera.position.set(0, focusY + verticalOffset, cameraZ);
           const nearMultiplier = GLB_NEAR_MULTIPLIER[deviceKey];
           const farMultiplier = GLB_FAR_MULTIPLIER[deviceKey];
-          camera.near = Math.max(cameraZ - (radius * nearMultiplier) / normalizedSizeRatio, 0.05);
-          camera.far = cameraZ + (radius * farMultiplier) / normalizedSizeRatio;
+          camera.near = Math.max(cameraZ - (motionRadius * nearMultiplier) / normalizedSizeRatio, 0.05);
+          camera.far = cameraZ + (motionRadius * farMultiplier) / normalizedSizeRatio;
           camera.lookAt(new THREE.Vector3(0, focusY, 0));
           camera.updateProjectionMatrix();
 
           baseYOffsetRef.current = model.position.y;
-          const floatConfig = GLB_FLOAT_RANGE[deviceKey];
-          const baseAmplitude = scaledHeight * floatConfig.multiplier;
-          const amplitudeWithFloor = Math.max(baseAmplitude, floatConfig.minAmplitude);
-          floatAmplitudeRef.current = Math.min(amplitudeWithFloor, radius * floatConfig.maxRatio);
+          floatAmplitudeRef.current = floatAmplitude;
           scene.add(model);
         },
         undefined,
