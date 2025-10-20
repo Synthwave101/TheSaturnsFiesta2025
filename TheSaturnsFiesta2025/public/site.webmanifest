@@ -1,0 +1,16 @@
+{
+  "name": "Saturns Fiesta 25",
+  "short_name": "Saturns25",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "description": "Invitación interactiva para The Saturns Fiesta 2025.",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "192x192 256x256 512x512",
+      "type": "image/x-icon"
+    }
+  ]
+}
