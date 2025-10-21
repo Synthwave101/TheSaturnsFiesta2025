@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Saturns Fiesta 25",
   description: "Invitación interactiva para The Saturns Fiesta 2025.",
-  themeColor: "#000000",
+  themeColor: "#050505",
   manifest: "/site.webmanifest",
   icons: {
     icon: [
@@ -30,7 +30,6 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     title: "Saturns Fiesta 25",
-    capable: true,
     statusBarStyle: "black",
   },
 };
