@@ -69,8 +69,17 @@ const GLB_FLOAT_RANGE = {
 // Margen mínimo que se reserva por debajo del modelo para evitar recortes cuando alcanza el punto más bajo de la animación.
 const GLB_BOTTOM_MARGIN_FACTOR = {
   ios: 0.04,
-  default: 0.06,
+  default: 0.00,
 } as const;
+
+// Relación alto/ancho deseada para el lienzo interno de Three.js.
+const CANVAS_INTERNAL_ASPECT = {
+  ios: 0.5,
+  default: 556 / 512,
+} as const;
+
+// Umbral (en px) a partir del cual consideramos que es tablet o escritorio y usamos el aspect ratio reducido.
+const CANVAS_WIDE_BREAKPOINT = 820;
 
 const FRAME_DIMENSIONS = {
   ios: {
@@ -178,13 +187,17 @@ export function InvitationScene({ pixelFontClass }: InvitationSceneProps) {
     let model: THREE.Object3D | null = null;
     let disposed = false;
 
-    const resize = () => {
+    // El tamaño de los atributos width/height del canvas (como el 512×256 del inspector) se fija aquí.
+    // El tamaño de los atributos width/height del canvas (por ejemplo 512×556) se fija aquí.
+  const resize = () => {
       const rect = canvas.getBoundingClientRect();
       const width = rect.width > 0 ? rect.width : 600;
-      const height = rect.height > 0 ? rect.height : width;
+      const isWideLayout = width >= CANVAS_WIDE_BREAKPOINT;
+      const aspectRatio = isIOSRef.current || isWideLayout ? CANVAS_INTERNAL_ASPECT.ios : CANVAS_INTERNAL_ASPECT.default;
+      const height = width * aspectRatio;
 
       renderer.setSize(width, height, false);
-      camera.aspect = width / height;
+      camera.aspect = width/ height;
       camera.updateProjectionMatrix();
     };
 
@@ -321,11 +334,13 @@ export function InvitationScene({ pixelFontClass }: InvitationSceneProps) {
           const sphere = scaledBox.getBoundingSphere(new THREE.Sphere());
           const radius = sphere ? sphere.radius : Math.max(scaledSize.x, scaledSize.y, scaledSize.z) * 0.5;
 
+          // Estas constantes controlan el movimiento vertical y la reserva mínima en la base del modelo.
           const floatConfig = GLB_FLOAT_RANGE[deviceKey];
           const baseAmplitude = scaledHeight * floatConfig.multiplier;
           const amplitudeWithFloor = Math.max(baseAmplitude, floatConfig.minAmplitude);
           const floatAmplitude = Math.min(amplitudeWithFloor, radius * floatConfig.maxRatio);
 
+          // El margen inferior evita que el GLB toque el borde del canvas aun en el punto más bajo de la animación.
           const bottomMargin = scaledHeight * GLB_BOTTOM_MARGIN_FACTOR[deviceKey];
           const restingYOffset = -scaledBox.min.y + bottomMargin + floatAmplitude;
           model.position.y += restingYOffset;
@@ -338,6 +353,7 @@ export function InvitationScene({ pixelFontClass }: InvitationSceneProps) {
             }
           });
 
+          // "motionRadius" define la esfera que cubre el recorrido completo del objeto para colocar la cámara.
           const motionRadius = radius + floatAmplitude;
           const fov = THREE.MathUtils.degToRad(camera.fov);
           const distance = motionRadius / Math.sin(fov / 2);
